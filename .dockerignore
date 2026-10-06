@@ -1,0 +1,14 @@
+node_modules
+vendor
+.git
+.env
+storage/**
+!storage/**/.gitignore
+bootstrap/cache/*.php
+public/build
+public/hot
+docker/edge/ssl
+.DS_Store
+*.log
+.idea
+.vscode

@@ -1,0 +1,229 @@
+name: megaphone
+
+# Local development stack (Sentinel pattern, see sentinel-docker). Megaphone is a
+# single app, so the compose wiring lives in this repo next to the image
+# (docker/), rather than in a separate *-docker repo.
+#
+# There is deliberately no compose .env file: every value is inline here, so a
+# fresh clone runs with no copy-and-edit step. Change a port by editing it below.
+#
+# Host ports are picked so this stack runs at the same time as lmse-docker and
+# sentinel-docker:
+#
+#                 lmse    sentinel        megaphone
+#   http          80      8080            8090
+#   https         443     443 / 8443      9443
+#   mysql         33060   33062-33063     33064
+#   redis         63790   63791-63792     63793
+#   smtp          1025    1026            1027
+#   livekit       -       7880-7882       7890-7892
+#
+# App, Reverb and LiveKit signalling all go through https://megaphone.local:9443;
+# only LiveKit's media ports (7891/tcp, 7892/udp) are reached directly.
+
+x-app: &app
+    build:
+        context: .
+        dockerfile: docker/Dockerfile
+        target: local
+    image: megaphone-app:local
+    init: true
+    restart: unless-stopped
+    volumes:
+        - .:/app
+        - composer_cache:/tmp/composer-cache
+    depends_on:
+        mysql:
+            condition: service_healthy
+        redis:
+            condition: service_started
+    networks:
+        - megaphone-network
+
+services:
+    # ---------------------------------------------------------------------------
+    # The app. One image (docker/Dockerfile), one container per APP_ROLE; the
+    # entrypoint picks the matching supervisor program set.
+    # ---------------------------------------------------------------------------
+
+    # nginx + Octane. Also installs Composer/npm deps, the app key and assets on
+    # first boot; the other roles wait for it.
+    web:
+        <<: *app
+        container_name: megaphone-web
+        environment:
+            APP_ROLE: web
+            COMPOSER_HOME: /tmp/composer-cache
+            DOMAIN_APP: megaphone.local
+            PHP_IDE_CONFIG: 'serverName=Megaphone'
+        depends_on:
+            mysql:
+                condition: service_healthy
+            redis:
+                condition: service_started
+            livekit:
+                condition: service_started
+
+    # Horizon.
+    worker:
+        <<: *app
+        container_name: megaphone-worker
+        environment:
+            APP_ROLE: worker
+            COMPOSER_HOME: /tmp/composer-cache
+            PHP_IDE_CONFIG: 'serverName=MegaphoneWorker'
+
+    # Reverb, reached by browsers through the edge proxy at wss://megaphone.local:9443/app.
+    reverb:
+        <<: *app
+        container_name: megaphone-reverb
+        environment:
+            APP_ROLE: reverb
+            COMPOSER_HOME: /tmp/composer-cache
+            PHP_IDE_CONFIG: 'serverName=MegaphoneReverb'
+
+    # Runs `schedule:run` every minute via cron.
+    scheduler:
+        <<: *app
+        container_name: megaphone-scheduler
+        environment:
+            APP_ROLE: scheduler
+            COMPOSER_HOME: /tmp/composer-cache
+            PHP_IDE_CONFIG: 'serverName=MegaphoneScheduler'
+
+    mysql:
+        build:
+            context: ./docker/mysql
+            dockerfile: Dockerfile
+        container_name: megaphone-mysql
+        restart: unless-stopped
+        environment:
+            MYSQL_ROOT_PASSWORD: secret
+            MYSQL_DATABASE: megaphone
+            MYSQL_USER: megaphone
+            MYSQL_PASSWORD: secret
+        ports:
+            - '33064:3306'
+        volumes:
+            - mysql_data:/var/lib/mysql
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'mysqladmin',
+                    'ping',
+                    '-h',
+                    '127.0.0.1',
+                    '-uroot',
+                    '-psecret',
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 10
+            start_period: 20s
+        networks:
+            - megaphone-network
+
+    redis:
+        build:
+            context: ./docker/redis
+            dockerfile: Dockerfile
+        container_name: megaphone-redis
+        restart: unless-stopped
+        ports:
+            - '63793:6379'
+        volumes:
+            - redis_data:/data
+        networks:
+            - megaphone-network
+
+    # ---------------------------------------------------------------------------
+    # Shared infrastructure.
+    # ---------------------------------------------------------------------------
+
+    # Edge reverse proxy: TLS termination and host/path routing only. It knows
+    # container names and ports, never the app's layout.
+    nginx:
+        build:
+            context: ./docker/edge
+            dockerfile: Dockerfile
+        container_name: megaphone-nginx
+        restart: unless-stopped
+        depends_on:
+            - web
+            - reverb
+            - livekit
+            - mailpit
+        ports:
+            - '8090:80'
+            - '9443:443'
+        volumes:
+            - ./docker/edge/ssl:/etc/nginx/ssl:ro
+        networks:
+            megaphone-network:
+                aliases:
+                    - megaphone.local
+                    - mail.megaphone.local
+
+    # Left on all interfaces: WebRTC media must be reachable from other devices on
+    # the LAN. If media cannot connect from another machine, set --node-ip below
+    # to this host's LAN address.
+    #
+    # The rtc ports are set in docker/livekit/livekit.yaml and must match the host
+    # ports here one-to-one (no remapping): ICE candidates advertise them as-is.
+    livekit:
+        # Pinned to the version Sentinel develops against (SPEC §2).
+        image: livekit/livekit-server:v1.13.5
+        container_name: megaphone-livekit
+        restart: unless-stopped
+        command:
+            [
+                '--dev',
+                '--bind',
+                '0.0.0.0',
+                '--node-ip=127.0.0.1',
+                '--config',
+                '/etc/livekit/livekit.yaml',
+            ]
+        environment:
+            LIVEKIT_KEYS: 'devkey: megaphone-local-livekit-secret-0001'
+        ports:
+            - '7890:7880'
+            - '7891:7891'
+            - '7892:7892/udp'
+        volumes:
+            - ./docker/livekit/livekit.yaml:/etc/livekit/livekit.yaml:ro
+        networks:
+            - megaphone-network
+
+    # UI at https://mail.megaphone.local:9443. The app talks SMTP to mailpit:1025
+    # over the compose network; 1027 is only the host-side mapping.
+    mailpit:
+        image: axllent/mailpit:latest
+        container_name: megaphone-mailpit
+        restart: unless-stopped
+        environment:
+            MP_SMTP_AUTH_ACCEPT_ANY: '1'
+            MP_SMTP_AUTH_ALLOW_INSECURE: '1'
+            MP_MAX_MESSAGES: '5000'
+        ports:
+            - '1027:1025'
+        volumes:
+            - mailpit_data:/data
+        networks:
+            - megaphone-network
+
+volumes:
+    composer_cache:
+        driver: local
+    mysql_data:
+        driver: local
+    redis_data:
+        driver: local
+    mailpit_data:
+        driver: local
+
+networks:
+    megaphone-network:
+        name: megaphone-network
+        driver: bridge
