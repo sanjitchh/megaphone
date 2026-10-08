@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 use OwenIt\Auditing\Auditable;
@@ -94,6 +95,16 @@ class Room extends Model implements AuditableContract
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * The share links people join through.
+     *
+     * @return HasMany<RoomLink, $this>
+     */
+    public function links(): HasMany
+    {
+        return $this->hasMany(RoomLink::class);
     }
 
     /**

@@ -33,6 +33,11 @@ const dateTimeFormat = new Intl.DateTimeFormat(undefined, {
     timeStyle: 'short',
 });
 
+/** "7 Oct 2026, 14:00" in the browser's time zone. */
+export function formatDateTime(iso: string): string {
+    return dateTimeFormat.format(new Date(iso));
+}
+
 const timeFormat = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' });
 
 /** "7 Oct 2026, 14:00 – 15:00", or both full dates when the range spans days. */

@@ -34,6 +34,7 @@ class RoomResource extends JsonResource
             'can' => [
                 'edit_schedule' => $this->status->isSchedulingEditable(),
                 'delete' => $this->status->isDeletable(),
+                'create_links' => $this->status->acceptsJoins(),
             ],
         ];
     }

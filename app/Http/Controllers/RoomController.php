@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\RoomCapacity;
 use App\Http\Requests\Rooms\StoreRoomRequest;
 use App\Http\Requests\Rooms\UpdateRoomRequest;
+use App\Http\Resources\RoomLinkResource;
 use App\Http\Resources\RoomResource;
 use App\Models\Room;
 use App\Services\Rooms\RoomService;
@@ -50,14 +51,17 @@ class RoomController extends Controller
     }
 
     /**
-     * Show the room edit form.
+     * Show the room edit form, with its share links.
      */
     public function edit(Room $room): Response
     {
         $room->load('host');
 
+        $links = $room->links()->forListing()->get()->each->setRelation('room', $room);
+
         return Inertia::render('rooms/edit', [
             'room' => RoomResource::make($room)->resolve(),
+            'links' => RoomLinkResource::collection($links)->resolve(),
             'options' => $this->formOptions(),
         ]);
     }

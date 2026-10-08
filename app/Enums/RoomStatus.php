@@ -24,4 +24,12 @@ enum RoomStatus: string
     {
         return $this !== self::Live;
     }
+
+    /**
+     * Whether people can still join, so links may be created or opened.
+     */
+    public function acceptsJoins(): bool
+    {
+        return $this === self::Scheduled || $this === self::Live;
+    }
 }

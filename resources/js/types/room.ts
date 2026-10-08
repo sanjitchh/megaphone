@@ -16,7 +16,34 @@ export type Room = {
     can: {
         edit_schedule: boolean;
         delete: boolean;
+        create_links: boolean;
     };
+};
+
+export type RoomLinkStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+
+export type RoomLink = {
+    uuid: string;
+    label: string | null;
+    url: string;
+    status: RoomLinkStatus;
+    expires_at: string;
+    revoked_at: string | null;
+    created_at: string | null;
+    can: {
+        change_expiry: boolean;
+        revoke: boolean;
+        regenerate: boolean;
+    };
+};
+
+export type JoinableRoom = {
+    title: string;
+    description: string | null;
+    status: RoomStatus;
+    starts_at: string;
+    ends_at: string;
+    host: string;
 };
 
 export type RoomFormOptions = {

@@ -3,16 +3,19 @@ import RoomController from '@/actions/App/Http/Controllers/RoomController';
 import Heading from '@/components/heading';
 import DeleteRoom from '@/components/rooms/delete-room';
 import RoomForm from '@/components/rooms/room-form';
+import RoomLinks from '@/components/rooms/room-links';
 import RoomStatusBadge from '@/components/rooms/room-status-badge';
 import { Separator } from '@/components/ui/separator';
 import { edit, index } from '@/routes/rooms';
-import type { Room, RoomFormOptions } from '@/types';
+import type { Room, RoomFormOptions, RoomLink } from '@/types';
 
 export default function EditRoom({
     room,
+    links,
     options,
 }: {
     room: Room;
+    links: RoomLink[];
     options: RoomFormOptions;
 }) {
     return (
@@ -41,6 +44,10 @@ export default function EditRoom({
                         submitLabel="Save"
                     />
                 </div>
+
+                <Separator />
+
+                <RoomLinks room={room} links={links} />
 
                 <Separator />
 

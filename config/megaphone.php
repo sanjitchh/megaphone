@@ -34,4 +34,20 @@ return [
         'max_speakers_limit' => (int) env('ROOMS_MAX_SPEAKERS_LIMIT', 8),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Room links
+    |--------------------------------------------------------------------------
+    |
+    | Join links (/r/{slug}) are the only access control, so the slug has to
+    | be unguessable: each character carries 5 bits. `join_rate_limit` caps
+    | how often one IP may open join links per minute.
+    |
+    */
+
+    'links' => [
+        'slug_length' => 24, // room_links.slug is varchar(32)
+        'join_rate_limit' => (int) env('ROOM_LINKS_JOIN_RATE_LIMIT', 30),
+    ],
+
 ];
