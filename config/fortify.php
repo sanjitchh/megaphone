@@ -161,7 +161,8 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // Registration is off: Megaphone has a single seeded host for now.
+        // Features::registration(),
         Features::resetPasswords(),
         Features::emailVerification(),
         Features::twoFactorAuthentication([
