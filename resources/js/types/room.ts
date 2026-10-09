@@ -9,6 +9,8 @@ export type Room = {
     max_speakers: number;
     starts_at: string;
     ends_at: string;
+    started_at: string | null;
+    ended_at: string | null;
     host?: {
         uuid: string;
         name: string;
@@ -17,7 +19,16 @@ export type Room = {
         edit_schedule: boolean;
         delete: boolean;
         create_links: boolean;
+        open_studio: boolean;
+        go_live: boolean;
+        end: boolean;
     };
+};
+
+/** A LiveKit grant for the host's studio; null when the media server could not be reached. */
+export type StudioConnection = {
+    server_url: string;
+    token: string;
 };
 
 export type RoomLinkStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED';

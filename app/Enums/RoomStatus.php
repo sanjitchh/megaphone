@@ -32,4 +32,28 @@ enum RoomStatus: string
     {
         return $this === self::Scheduled || $this === self::Live;
     }
+
+    /**
+     * Whether the host can open the studio: before and during the broadcast.
+     */
+    public function hasStudio(): bool
+    {
+        return $this->acceptsJoins();
+    }
+
+    /**
+     * Whether the host may start broadcasting.
+     */
+    public function canGoLive(): bool
+    {
+        return $this === self::Scheduled;
+    }
+
+    /**
+     * Whether the session may be ended for everyone.
+     */
+    public function canEnd(): bool
+    {
+        return $this === self::Live;
+    }
 }

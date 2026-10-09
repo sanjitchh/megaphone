@@ -27,6 +27,8 @@ class RoomResource extends JsonResource
             'max_speakers' => $this->max_speakers,
             'starts_at' => $this->starts_at->toIso8601String(),
             'ends_at' => $this->ends_at->toIso8601String(),
+            'started_at' => $this->started_at?->toIso8601String(),
+            'ended_at' => $this->ended_at?->toIso8601String(),
             'host' => $this->whenLoaded('host', fn () => [
                 'uuid' => $this->host->uuid,
                 'name' => $this->host->name,
@@ -35,6 +37,9 @@ class RoomResource extends JsonResource
                 'edit_schedule' => $this->status->isSchedulingEditable(),
                 'delete' => $this->status->isDeletable(),
                 'create_links' => $this->status->acceptsJoins(),
+                'open_studio' => $this->status->hasStudio(),
+                'go_live' => $this->status->canGoLive(),
+                'end' => $this->status->canEnd(),
             ],
         ];
     }

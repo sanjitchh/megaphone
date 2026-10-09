@@ -45,6 +45,7 @@ class RoomFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => RoomStatus::Live,
+            'started_at' => now(),
         ]);
     }
 
@@ -55,6 +56,8 @@ class RoomFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => RoomStatus::Ended,
+            'started_at' => $attributes['starts_at'],
+            'ended_at' => $attributes['ends_at'],
         ]);
     }
 }

@@ -1,10 +1,10 @@
 import { Head, Link } from '@inertiajs/react';
-import { Plus, Video } from 'lucide-react';
+import { Plus, Radio, Video } from 'lucide-react';
 import Heading from '@/components/heading';
 import RoomStatusBadge from '@/components/rooms/room-status-badge';
 import { Button } from '@/components/ui/button';
 import { formatSchedule } from '@/lib/datetime';
-import { create, edit, index } from '@/routes/rooms';
+import { create, edit, index, studio } from '@/routes/rooms';
 import type { Paginated, Room } from '@/types';
 
 const numberFormat = new Intl.NumberFormat();
@@ -59,6 +59,9 @@ export default function Rooms({ rooms }: { rooms: Paginated<Room> }) {
                                     >
                                         Capacity
                                     </th>
+                                    <th scope="col" className="px-4 py-3">
+                                        <span className="sr-only">Actions</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
@@ -89,6 +92,27 @@ export default function Rooms({ rooms }: { rooms: Paginated<Room> }) {
                                         <td className="px-4 py-3 text-right text-muted-foreground tabular-nums">
                                             {numberFormat.format(
                                                 room.max_participants,
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-2 text-right">
+                                            {room.can.open_studio && (
+                                                <Button
+                                                    variant={
+                                                        room.status === 'LIVE'
+                                                            ? 'default'
+                                                            : 'outline'
+                                                    }
+                                                    size="sm"
+                                                    asChild
+                                                >
+                                                    <Link
+                                                        href={studio(room.uuid)}
+                                                        aria-label={`Open the studio for ${room.title}`}
+                                                    >
+                                                        <Radio />
+                                                        Studio
+                                                    </Link>
+                                                </Button>
                                             )}
                                         </td>
                                     </tr>

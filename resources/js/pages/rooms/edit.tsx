@@ -1,12 +1,14 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
+import { Radio } from 'lucide-react';
 import RoomController from '@/actions/App/Http/Controllers/RoomController';
 import Heading from '@/components/heading';
 import DeleteRoom from '@/components/rooms/delete-room';
 import RoomForm from '@/components/rooms/room-form';
 import RoomLinks from '@/components/rooms/room-links';
 import RoomStatusBadge from '@/components/rooms/room-status-badge';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { edit, index } from '@/routes/rooms';
+import { edit, index, studio } from '@/routes/rooms';
 import type { Room, RoomFormOptions, RoomLink } from '@/types';
 
 export default function EditRoom({
@@ -33,7 +35,17 @@ export default function EditRoom({
                                     : undefined
                             }
                         />
-                        <RoomStatusBadge status={room.status} />
+                        <div className="flex items-center gap-3">
+                            <RoomStatusBadge status={room.status} />
+                            {room.can.open_studio && (
+                                <Button size="sm" asChild>
+                                    <Link href={studio(room.uuid)}>
+                                        <Radio />
+                                        Open studio
+                                    </Link>
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
                     <RoomForm

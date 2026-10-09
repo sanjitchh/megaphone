@@ -28,6 +28,8 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * @property int $max_speakers
  * @property Carbon $starts_at
  * @property Carbon $ends_at
+ * @property Carbon|null $started_at
+ * @property Carbon|null $ended_at
  * @property RoomStatus $status
  * @property array<string, mixed>|null $settings
  * @property string $livekit_room_name
@@ -35,7 +37,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  */
-#[Fillable(['host_id', 'created_by', 'title', 'description', 'max_participants', 'max_speakers', 'starts_at', 'ends_at', 'status', 'settings', 'livekit_room_name'])]
+#[Fillable(['host_id', 'created_by', 'title', 'description', 'max_participants', 'max_speakers', 'starts_at', 'ends_at', 'started_at', 'ended_at', 'status', 'settings', 'livekit_room_name'])]
 #[Hidden(['id', 'host_id', 'created_by'])]
 class Room extends Model implements AuditableContract
 {
@@ -54,6 +56,8 @@ class Room extends Model implements AuditableContract
             'max_speakers' => 'integer',
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
+            'started_at' => 'datetime',
+            'ended_at' => 'datetime',
             'status' => RoomStatus::class,
             'settings' => 'array',
         ];
