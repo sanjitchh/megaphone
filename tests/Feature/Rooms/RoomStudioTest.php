@@ -5,6 +5,7 @@ namespace Tests\Feature\Rooms;
 use App\Enums\RoomStatus;
 use App\Libraries\LiveKit\LiveKitClient;
 use App\Models\Room;
+use App\Models\RoomLink;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -91,14 +92,36 @@ class RoomStudioTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('connection', null));
     }
 
-    public function test_a_finished_room_has_no_studio(): void
+    public function test_a_finished_room_shows_the_session_as_over_without_a_connection(): void
     {
         $this->room->update(['status' => RoomStatus::Ended]);
 
+        $this->mock(LiveKitClient::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('createRoom');
+        });
+
         $this->actingAs($this->host)
             ->get(route('rooms.studio', $this->room))
-            ->assertRedirect(route('rooms.edit', $this->room))
-            ->assertInertiaFlash('toast.type', 'error');
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('rooms/studio')
+                ->where('room.status', RoomStatus::Ended->value)
+                ->where('connection', null));
+    }
+
+    public function test_the_studio_lists_only_active_links(): void
+    {
+        $this->expectHostConnection();
+
+        $active = RoomLink::factory()->for($this->room)->create(['label' => 'Newsletter']);
+        RoomLink::factory()->for($this->room)->revoked()->create();
+        RoomLink::factory()->for($this->room)->expired()->create();
+
+        $this->actingAs($this->host)
+            ->get(route('rooms.studio', $this->room))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('links', 1)
+                ->where('links.0.uuid', $active->uuid));
     }
 
     public function test_the_host_can_go_live(): void
@@ -138,7 +161,7 @@ class RoomStudioTest extends TestCase
 
         $this->actingAs($this->host)
             ->post(route('rooms.end', $this->room))
-            ->assertRedirect(route('rooms.edit', $this->room))
+            ->assertRedirect(route('rooms.studio', $this->room))
             ->assertInertiaFlash('toast.type', 'success');
 
         $this->room->refresh();
@@ -156,7 +179,7 @@ class RoomStudioTest extends TestCase
 
         $this->actingAs($this->host)
             ->post(route('rooms.end', $this->room))
-            ->assertRedirect(route('rooms.edit', $this->room));
+            ->assertRedirect(route('rooms.studio', $this->room));
 
         $this->assertSame(RoomStatus::Ended, $this->room->refresh()->status);
     }

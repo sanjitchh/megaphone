@@ -1,10 +1,11 @@
 import { Head, Link } from '@inertiajs/react';
 import { Plus, Radio, Video } from 'lucide-react';
 import Heading from '@/components/heading';
+import OpenStudioLink from '@/components/rooms/open-studio-link';
 import RoomStatusBadge from '@/components/rooms/room-status-badge';
 import { Button } from '@/components/ui/button';
 import { formatSchedule } from '@/lib/datetime';
-import { create, edit, index, studio } from '@/routes/rooms';
+import { create, edit, index } from '@/routes/rooms';
 import type { Paginated, Room } from '@/types';
 
 const numberFormat = new Intl.NumberFormat();
@@ -105,13 +106,13 @@ export default function Rooms({ rooms }: { rooms: Paginated<Room> }) {
                                                     size="sm"
                                                     asChild
                                                 >
-                                                    <Link
-                                                        href={studio(room.uuid)}
-                                                        aria-label={`Open the studio for ${room.title}`}
+                                                    <OpenStudioLink
+                                                        roomUuid={room.uuid}
+                                                        aria-label={`Open the studio for ${room.title} in a new tab`}
                                                     >
                                                         <Radio />
                                                         Studio
-                                                    </Link>
+                                                    </OpenStudioLink>
                                                 </Button>
                                             )}
                                         </td>

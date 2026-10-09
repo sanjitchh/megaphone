@@ -1,7 +1,9 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { ConnectionState, DisconnectReason } from 'livekit-client';
 import type { Room as LiveKitRoom } from 'livekit-client';
 import {
+    Check,
+    Copy,
     Link2,
     Mic,
     MicOff,
@@ -34,19 +36,27 @@ import {
     useStudioRoom,
     useViewerCount,
 } from '@/lib/livekit/use-studio-room';
+import { useClipboard } from '@/hooks/use-clipboard';
 import { cn } from '@/lib/utils';
-import { edit, index, studio } from '@/routes/rooms';
-import type { Room, StudioConnection } from '@/types';
+import type { Room, RoomLink, StudioConnection } from '@/types';
 
 const numberFormat = new Intl.NumberFormat();
 
-export default function Studio({
-    room,
-    connection,
-}: {
+type StudioProps = {
     room: Room;
     connection: StudioConnection | null;
-}) {
+    links: RoomLink[];
+};
+
+export default function Studio(props: StudioProps) {
+    return props.room.can.open_studio ? (
+        <StudioConsole {...props} />
+    ) : (
+        <SessionOver room={props.room} />
+    );
+}
+
+function StudioConsole({ room, connection, links }: StudioProps) {
     const live = room.status === 'LIVE';
     const hostName = room.host?.name ?? 'Host';
 
@@ -72,6 +82,20 @@ export default function Studio({
         media.microphone,
     );
 
+    // Closing this tab drops the broadcast for everyone watching, so make the browser ask first.
+    useEffect(() => {
+        if (!live) {
+            return;
+        }
+
+        const confirmLeave = (event: BeforeUnloadEvent) =>
+            event.preventDefault();
+
+        window.addEventListener('beforeunload', confirmLeave);
+
+        return () => window.removeEventListener('beforeunload', confirmLeave);
+    }, [live]);
+
     const goLive = () => {
         router.visit(RoomStudioController.goLive(room.uuid), {
             // Stay mounted: remounting would drop the connection and the open devices.
@@ -86,7 +110,7 @@ export default function Studio({
         <>
             <Head title={`Studio · ${room.title}`} />
 
-            <div className="flex h-full flex-1 flex-col gap-6 p-4">
+            <div className="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col gap-6 p-4 lg:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
                         <Heading
@@ -127,7 +151,6 @@ export default function Studio({
 
                 {!ending && (
                     <ConnectionAlert
-                        roomUuid={room.uuid}
                         room={liveKitRoom}
                         status={status}
                         unreachable={connection === null}
@@ -223,23 +246,12 @@ export default function Studio({
                             </p>
                             <p className="text-sm text-muted-foreground">
                                 {live
-                                    ? 'Leaving the studio keeps the session live. End it to disconnect everyone.'
+                                    ? 'Closing this tab keeps the session live, but viewers lose you. End it to disconnect everyone.'
                                     : 'People who join now wait for you. Your camera and mic go out when you go live.'}
                             </p>
                         </section>
 
-                        <section className="space-y-2 rounded-xl border p-4">
-                            <h3 className="flex items-center gap-2 text-sm font-medium">
-                                <Link2 className="size-4 text-muted-foreground" />
-                                Share links
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                                Viewers join through the room’s share links.
-                            </p>
-                            <Button variant="outline" size="sm" asChild>
-                                <Link href={edit(room.uuid)}>Manage links</Link>
-                            </Button>
-                        </section>
+                        <ShareLinks links={links} />
 
                         <ConnectionIndicator status={status} />
                     </aside>
@@ -306,14 +318,12 @@ function ConnectionIndicator({ status }: { status: RoomConnectionStatus }) {
 }
 
 function ConnectionAlert({
-    roomUuid,
     room,
     status,
     unreachable,
     disconnectReason,
     onReconnect,
 }: {
-    roomUuid: string;
     room: LiveKitRoom;
     status: RoomConnectionStatus;
     unreachable: boolean;
@@ -345,8 +355,12 @@ function ConnectionAlert({
                 <AlertTitle>The session has ended.</AlertTitle>
                 <AlertDescription className="flex flex-wrap items-center gap-3">
                     <span>Everyone has been disconnected.</span>
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href={edit(roomUuid)}>Back to the room</Link>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => router.reload()}
+                    >
+                        Done
                     </Button>
                 </AlertDescription>
             </Alert>
@@ -418,10 +432,84 @@ function MediaAlert({
     );
 }
 
-Studio.layout = (props: { room: Room }) => ({
-    breadcrumbs: [
-        { title: 'Rooms', href: index() },
-        { title: props.room.title, href: edit(props.room.uuid) },
-        { title: 'Studio', href: studio(props.room.uuid) },
-    ],
-});
+function ShareLinks({ links }: { links: RoomLink[] }) {
+    const [copiedText, copy] = useClipboard();
+
+    return (
+        <section className="space-y-3 rounded-xl border p-4">
+            <h3 className="flex items-center gap-2 text-sm font-medium">
+                <Link2 className="size-4 text-muted-foreground" />
+                Share links
+            </h3>
+            {links.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                    No active links. Create one from the room’s page.
+                </p>
+            ) : (
+                <ul className="space-y-1">
+                    {links.map((link) => (
+                        <li
+                            key={link.uuid}
+                            className="flex items-center justify-between gap-2"
+                        >
+                            <span className="min-w-0 truncate text-sm">
+                                {link.label ?? 'Untitled link'}
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label={`Copy ${link.label ?? 'untitled link'}`}
+                                onClick={() => void copy(link.url)}
+                            >
+                                {copiedText === link.url ? <Check /> : <Copy />}
+                                {copiedText === link.url ? 'Copied' : 'Copy'}
+                            </Button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+    );
+}
+
+/**
+ * A finished room: the studio tab stays put (no jump back to the dashboard) and says so.
+ */
+function SessionOver({ room }: { room: Room }) {
+    return (
+        <>
+            <Head title={`Studio · ${room.title}`} />
+
+            <div className="flex flex-1 items-center justify-center p-6">
+                <div className="max-w-sm space-y-4 text-center">
+                    <RoomStatusBadge status={room.status} />
+                    <h1 className="text-xl font-semibold tracking-tight">
+                        {room.status === 'CANCELLED'
+                            ? 'This session was cancelled'
+                            : 'This session has ended'}
+                    </h1>
+                    <p className="text-sm text-muted-foreground">
+                        {room.title}
+                        {room.started_at && room.ended_at && (
+                            <>
+                                <br />
+                                <span className="tabular-nums">
+                                    {formatSchedule(
+                                        room.started_at,
+                                        room.ended_at,
+                                    )}
+                                </span>
+                            </>
+                        )}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                        Everyone has been disconnected. You can close this tab.
+                    </p>
+                    <Button variant="outline" onClick={() => window.close()}>
+                        Close tab
+                    </Button>
+                </div>
+            </div>
+        </>
+    );
+}

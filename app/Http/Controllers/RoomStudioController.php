@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\RoomLinkResource;
 use App\Http\Resources\RoomResource;
 use App\Models\Room;
 use App\Services\Rooms\RoomSessionService;
@@ -16,22 +17,32 @@ class RoomStudioController extends Controller
     /**
      * Show the host's studio: camera and mic preview, screen share, going live and ending.
      */
-    public function show(Request $request, Room $room, RoomSessionService $sessions): Response|RedirectResponse
+    public function show(Request $request, Room $room, RoomSessionService $sessions): Response
     {
         $this->ensureHost($request, $room);
 
-        if (! $room->status->hasStudio()) {
-            Inertia::flash('toast', ['type' => 'error', 'message' => __('This room has finished.')]);
+        $room->load('host');
 
-            return to_route('rooms.edit', $room);
+        // The studio runs in its own tab, so a finished room still renders here (as "session
+        // over") rather than sending the host back to the dashboard mid-screen-share.
+        if (! $room->status->hasStudio()) {
+            return Inertia::render('rooms/studio', [
+                'room' => RoomResource::make($room)->resolve(),
+                'connection' => null,
+                'links' => [],
+            ]);
         }
 
-        $room->load('host');
+        $links = $room->links()->forListing()->get()
+            ->filter->isActive()
+            ->each->setRelation('room', $room)
+            ->values();
 
         return Inertia::render('rooms/studio', [
             'room' => RoomResource::make($room)->resolve(),
             // A LiveKit outage should not take the page down: the studio shows it and offers a retry.
             'connection' => fn () => rescue(fn () => $sessions->hostConnection($room)),
+            'links' => RoomLinkResource::collection($links)->resolve(),
         ]);
     }
 
@@ -72,7 +83,7 @@ class RoomStudioController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Session ended.')]);
 
-        return to_route('rooms.edit', $room);
+        return to_route('rooms.studio', $room);
     }
 
     /**

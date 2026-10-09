@@ -1,14 +1,15 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { Radio } from 'lucide-react';
 import RoomController from '@/actions/App/Http/Controllers/RoomController';
 import Heading from '@/components/heading';
 import DeleteRoom from '@/components/rooms/delete-room';
 import RoomForm from '@/components/rooms/room-form';
 import RoomLinks from '@/components/rooms/room-links';
+import OpenStudioLink from '@/components/rooms/open-studio-link';
 import RoomStatusBadge from '@/components/rooms/room-status-badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { edit, index, studio } from '@/routes/rooms';
+import { edit, index } from '@/routes/rooms';
 import type { Room, RoomFormOptions, RoomLink } from '@/types';
 
 export default function EditRoom({
@@ -39,10 +40,10 @@ export default function EditRoom({
                             <RoomStatusBadge status={room.status} />
                             {room.can.open_studio && (
                                 <Button size="sm" asChild>
-                                    <Link href={studio(room.uuid)}>
+                                    <OpenStudioLink roomUuid={room.uuid}>
                                         <Radio />
                                         Open studio
-                                    </Link>
+                                    </OpenStudioLink>
                                 </Button>
                             )}
                         </div>
