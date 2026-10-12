@@ -5,7 +5,7 @@ import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
-import StudioLayout from '@/layouts/studio-layout';
+import StandaloneLayout from '@/layouts/standalone-layout';
 import { configureEcho } from '@laravel/echo-react';
 
 configureEcho({
@@ -18,10 +18,10 @@ void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     layout: (name) => {
         switch (true) {
+            case name === 'rooms/studio' || name === 'join/room':
+                return StandaloneLayout;
             case name.startsWith('auth/') || name.startsWith('join/'):
                 return AuthLayout;
-            case name === 'rooms/studio':
-                return StudioLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];
             default:

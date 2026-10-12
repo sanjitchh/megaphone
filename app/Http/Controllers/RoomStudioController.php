@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\RoomLinkResource;
+use App\Http\Resources\RoomParticipantResource;
 use App\Http\Resources\RoomResource;
 use App\Models\Room;
 use App\Services\Rooms\RoomSessionService;
@@ -30,6 +31,7 @@ class RoomStudioController extends Controller
                 'room' => RoomResource::make($room)->resolve(),
                 'connection' => null,
                 'links' => [],
+                'stage' => ['hands' => [], 'speakers' => []],
             ]);
         }
 
@@ -43,6 +45,12 @@ class RoomStudioController extends Controller
             // A LiveKit outage should not take the page down: the studio shows it and offers a retry.
             'connection' => fn () => rescue(fn () => $sessions->hostConnection($room)),
             'links' => RoomLinkResource::collection($links)->resolve(),
+            // Small by design (hands and speakers, not the audience), so it is reloaded whole
+            // whenever the studio hears that the stage changed.
+            'stage' => fn () => [
+                'hands' => RoomParticipantResource::collection($room->participants()->notRemoved()->handRaised()->get())->resolve(),
+                'speakers' => RoomParticipantResource::collection($room->participants()->notRemoved()->speakers()->get())->resolve(),
+            ],
         ]);
     }
 

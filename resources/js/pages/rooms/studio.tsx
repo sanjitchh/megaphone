@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
+import { useEcho } from '@laravel/echo-react';
+import { toast } from 'sonner';
 import { ConnectionState, DisconnectReason } from 'livekit-client';
-import type { Room as LiveKitRoom } from 'livekit-client';
 import {
     Check,
     Copy,
@@ -11,7 +12,6 @@ import {
     ScreenShare,
     ScreenShareOff,
     TriangleAlert,
-    Users,
     Video,
     VideoOff,
 } from 'lucide-react';
@@ -19,9 +19,11 @@ import { useEffect, useState } from 'react';
 import RoomStudioController from '@/actions/App/Http/Controllers/RoomStudioController';
 import Heading from '@/components/heading';
 import RoomStatusBadge from '@/components/rooms/room-status-badge';
+import { CameraTile, RoomAudio } from '@/components/livekit/remote-media';
 import DeviceControl from '@/components/studio/device-control';
 import EndSessionDialog from '@/components/studio/end-session-dialog';
 import MicLevel from '@/components/studio/mic-level';
+import ParticipantsPanel from '@/components/studio/participants-panel';
 import StagePreview from '@/components/studio/stage-preview';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -30,22 +32,18 @@ import { formatSchedule } from '@/lib/datetime';
 import { useLocalMedia, useTrackMuted } from '@/lib/livekit/use-local-media';
 import type { MediaFailure } from '@/lib/livekit/use-local-media';
 import type { RoomConnectionStatus } from '@/lib/livekit/use-room-connection';
-import {
-    usePublishWhileLive,
-    useScreenShare,
-    useStudioRoom,
-    useViewerCount,
-} from '@/lib/livekit/use-studio-room';
+import { usePublishedTracks } from '@/lib/livekit/use-connected-room';
+import { stageOf, useRoomSnapshot } from '@/lib/livekit/use-stage';
+import { useScreenShare, useStudioRoom } from '@/lib/livekit/use-studio-room';
 import { useClipboard } from '@/hooks/use-clipboard';
 import { cn } from '@/lib/utils';
-import type { Room, RoomLink, StudioConnection } from '@/types';
-
-const numberFormat = new Intl.NumberFormat();
+import type { Room, RoomLink, StageState, StudioConnection } from '@/types';
 
 type StudioProps = {
     room: Room;
     connection: StudioConnection | null;
     links: RoomLink[];
+    stage: StageState;
 };
 
 export default function Studio(props: StudioProps) {
@@ -56,7 +54,7 @@ export default function Studio(props: StudioProps) {
     );
 }
 
-function StudioConsole({ room, connection, links }: StudioProps) {
+function StudioConsole({ room, connection, links, stage }: StudioProps) {
     const live = room.status === 'LIVE';
     const hostName = room.host?.name ?? 'Host';
 
@@ -70,16 +68,30 @@ function StudioConsole({ room, connection, links }: StudioProps) {
     const media = useLocalMedia();
     const cameraOff = useTrackMuted(media.camera);
     const [screenShare, setScreenShareEnabled] = useScreenShare(liveKitRoom);
-    const viewers = useViewerCount(liveKitRoom);
+    const snapshot = useRoomSnapshot(liveKitRoom);
+    const { speakers } = stageOf(snapshot.remotes);
     const [goingLive, setGoingLive] = useState(false);
     const [ending, setEnding] = useState(false);
 
-    usePublishWhileLive(
+    usePublishedTracks(
         liveKitRoom,
         live,
         connected,
         media.camera,
         media.microphone,
+    );
+
+    // Hands and the stage change server-side; the studio hears about it and reloads them.
+    useEcho<{ type: string; participant: { uuid: string; name: string } }>(
+        `rooms.${room.uuid}.studio`,
+        '.stage.changed',
+        (event) => {
+            if (event.type === 'HAND.RAISED') {
+                toast(`${event.participant.name} raised their hand`);
+            }
+
+            router.reload({ only: ['stage'] });
+        },
     );
 
     // Closing this tab drops the broadcast for everyone watching, so make the browser ask first.
@@ -151,7 +163,7 @@ function StudioConsole({ room, connection, links }: StudioProps) {
 
                 {!ending && (
                     <ConnectionAlert
-                        room={liveKitRoom}
+                        state={snapshot.state}
                         status={status}
                         unreachable={connection === null}
                         disconnectReason={disconnectReason}
@@ -174,6 +186,24 @@ function StudioConsole({ room, connection, links }: StudioProps) {
                             hostName={hostName}
                             live={live}
                         />
+
+                        {speakers.length > 0 && (
+                            <ul
+                                aria-label="On stage"
+                                className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+                            >
+                                {speakers.map((speaker) => (
+                                    <li key={speaker.identity}>
+                                        <CameraTile
+                                            person={speaker}
+                                            className="aspect-video"
+                                        />
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+
+                        <RoomAudio remotes={snapshot.remotes} />
 
                         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3">
                             <div className="flex items-center gap-4">
@@ -231,25 +261,18 @@ function StudioConsole({ room, connection, links }: StudioProps) {
                     </div>
 
                     <aside className="space-y-4">
-                        <section className="space-y-2 rounded-xl border p-4">
-                            <h3 className="flex items-center gap-2 text-sm font-medium">
-                                <Users className="size-4 text-muted-foreground" />
-                                Audience
-                            </h3>
-                            <p className="text-sm text-muted-foreground tabular-nums">
-                                <span className="text-2xl font-semibold text-foreground">
-                                    {connected
-                                        ? numberFormat.format(viewers)
-                                        : '–'}
-                                </span>{' '}
-                                of {numberFormat.format(room.max_participants)}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                                {live
-                                    ? 'Closing this tab keeps the session live, but viewers lose you. End it to disconnect everyone.'
-                                    : 'People who join now wait for you. Your camera and mic go out when you go live.'}
-                            </p>
-                        </section>
+                        <ParticipantsPanel
+                            room={room}
+                            remotes={snapshot.remotes}
+                            connected={connected}
+                            stage={stage}
+                        />
+
+                        <p className="px-1 text-sm text-muted-foreground">
+                            {live
+                                ? 'Closing this tab keeps the session live, but viewers lose you. End it to disconnect everyone.'
+                                : 'Your camera and mic go out when you go live.'}
+                        </p>
 
                         <ShareLinks links={links} />
 
@@ -318,13 +341,13 @@ function ConnectionIndicator({ status }: { status: RoomConnectionStatus }) {
 }
 
 function ConnectionAlert({
-    room,
+    state,
     status,
     unreachable,
     disconnectReason,
     onReconnect,
 }: {
-    room: LiveKitRoom;
+    state: ConnectionState;
     status: RoomConnectionStatus;
     unreachable: boolean;
     disconnectReason: DisconnectReason | undefined;
@@ -335,7 +358,7 @@ function ConnectionAlert({
     }
 
     // The SDK is healing a blip on its own; a second join now would abort it.
-    if (room.state !== ConnectionState.Disconnected && !unreachable) {
+    if (state !== ConnectionState.Disconnected && !unreachable) {
         return (
             <Alert>
                 <Spinner />

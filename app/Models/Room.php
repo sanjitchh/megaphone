@@ -112,6 +112,16 @@ class Room extends Model implements AuditableContract
     }
 
     /**
+     * Everyone who has joined through a share link.
+     *
+     * @return HasMany<RoomParticipant, $this>
+     */
+    public function participants(): HasMany
+    {
+        return $this->hasMany(RoomParticipant::class);
+    }
+
+    /**
      * Upcoming and live rooms first (soonest start on top), then finished ones (most recent on top).
      *
      * @param  Builder<Room>  $query

@@ -149,3 +149,64 @@ export function useMediaDevices(
 
     return devices;
 }
+
+/**
+ * One device, opened only while `enabled` and stopped (light off) as soon as it is not:
+ * a viewer's self-view camera, or their mic once they are on stage.
+ */
+export function useOptionalTrack<K extends 'camera' | 'microphone'>(
+    kind: K,
+    enabled: boolean,
+): {
+    track: (K extends 'camera' ? LocalVideoTrack : LocalAudioTrack) | undefined;
+    failure: MediaFailure | undefined;
+} {
+    const [state, setState] = useState<{
+        track?: LocalTrack;
+        failure?: MediaFailure;
+    }>({});
+
+    useEffect(() => {
+        if (!enabled) {
+            return;
+        }
+
+        let active = true;
+        let opened: LocalTrack | undefined;
+
+        const open =
+            kind === 'camera'
+                ? createLocalVideoTrack({
+                      resolution: VideoPresets.h360.resolution,
+                  })
+                : createLocalAudioTrack({
+                      echoCancellation: true,
+                      noiseSuppression: true,
+                  });
+
+        open.then(
+            (track) => {
+                opened = track;
+
+                if (active) {
+                    setState({ track });
+                } else {
+                    track.stop();
+                }
+            },
+            (error: unknown) => {
+                if (active) {
+                    setState({ failure: classify(error) });
+                }
+            },
+        );
+
+        return () => {
+            active = false;
+            opened?.stop();
+            setState({});
+        };
+    }, [kind, enabled]);
+
+    return state as ReturnType<typeof useOptionalTrack<K>>;
+}

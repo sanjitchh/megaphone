@@ -8,6 +8,11 @@ use Agence104\LiveKit\RoomCreateOptions;
 use Agence104\LiveKit\VideoGrant;
 use GuzzleHttp\Client as HttpClient;
 use InvalidArgumentException;
+use Livekit\DataPacket\Kind;
+use Livekit\ParticipantPermission;
+use Livekit\TrackSource;
+use Livekit\TwirpError;
+use Twirp\ErrorCode;
 
 /**
  * Ported from Sentinel's `app/Services/LiveKit/LiveKitClient.php`, without its agent dispatch.
@@ -80,6 +85,85 @@ class LiveKitClient
     public function deleteRoom(string $roomName): void
     {
         $this->roomServiceClient()->deleteRoom($roomName);
+    }
+
+    /**
+     * Disconnect a participant. One who has already left counts as removed.
+     */
+    public function removeParticipant(string $roomName, string $identity): void
+    {
+        try {
+            $this->roomServiceClient()->removeParticipant($roomName, $identity);
+        } catch (TwirpError $e) {
+            if ($e->getErrorCode() !== ErrorCode::NotFound) {
+                throw $e;
+            }
+        }
+    }
+
+    /**
+     * Change what a connected participant may publish. The client sees the change as a
+     * permissions update; when publishing is taken away, LiveKit unpublishes their tracks.
+     *
+     * @param  array<int, string>  $canPublishSources  Source names, as in tokens (`camera`, `microphone`, …).
+     * @return bool false when the participant is not in the room
+     */
+    public function updateParticipantPermissions(
+        string $roomName,
+        string $identity,
+        bool $canPublish,
+        array $canPublishSources = [],
+        bool $canSubscribe = true,
+        bool $canPublishData = false,
+    ): bool {
+        $permission = (new ParticipantPermission)
+            ->setCanSubscribe($canSubscribe)
+            ->setCanPublish($canPublish)
+            ->setCanPublishData($canPublishData)
+            // Protobuf accepts a plain array here; the docblock only names its RepeatedField.
+            ->setCanPublishSources(array_map( // @phpstan-ignore argument.type
+                fn (string $source): int => (int) TrackSource::value(strtoupper($source)),
+                $canPublishSources,
+            ));
+
+        try {
+            $this->roomServiceClient()->updateParticipant($roomName, $identity, permission: $permission);
+        } catch (TwirpError $e) {
+            if ($e->getErrorCode() === ErrorCode::NotFound) {
+                return false;
+            }
+
+            throw $e;
+        }
+
+        return true;
+    }
+
+    /**
+     * Send a reliable data message, to the given identities or (with none) to the whole room.
+     * Participants receive it even without permission to publish data themselves.
+     *
+     * @param  array<int, string>  $destinationIdentities
+     */
+    public function sendData(string $roomName, string $data, array $destinationIdentities = [], ?string $topic = null): void
+    {
+        $this->roomServiceClient()->sendData($roomName, $data, Kind::RELIABLE, $destinationIdentities, $topic);
+    }
+
+    /**
+     * How many participants are connected to a room; none when it does not exist.
+     */
+    public function countParticipants(string $roomName): int
+    {
+        try {
+            return count($this->roomServiceClient()->listParticipants($roomName)->getParticipants());
+        } catch (TwirpError $e) {
+            if ($e->getErrorCode() === ErrorCode::NotFound) {
+                return 0;
+            }
+
+            throw $e;
+        }
     }
 
     /**

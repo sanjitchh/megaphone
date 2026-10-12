@@ -37,6 +37,9 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('join', fn (Request $request) => Limit::perMinute((int) config('megaphone.links.join_rate_limit'))
             ->by($request->ip()));
+
+        RateLimiter::for('participant', fn (Request $request) => Limit::perMinute(60)
+            ->by($request->session()->getId()));
     }
 
     /**

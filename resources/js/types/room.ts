@@ -25,6 +25,19 @@ export type Room = {
     };
 };
 
+/** Someone in the room's hand queue or on its stage. */
+export type StageParticipant = {
+    uuid: string;
+    name: string;
+    hand_raised_at: string | null;
+    promoted_at: string | null;
+};
+
+export type StageState = {
+    hands: StageParticipant[];
+    speakers: StageParticipant[];
+};
+
 /** A LiveKit grant for the host's studio; null when the media server could not be reached. */
 export type StudioConnection = {
     server_url: string;
